@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk 'NR==19,NR==138' compliments.js)",
+      "Bash(python -m http.server 8743)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8743/index.html)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:8743/photos/WhatsApp%20Image%202026-08-05%20at%2014.20.21%20\\(1\\).jpeg\")",
+      "Bash(rm -f mobile.png desktop.png mobile2.png desktop2.png mobile_err.log desktop_err.log dom_dump.html)",
+      "Bash(rm -f 'C:\\\\Users\\\\harsh\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-harsh-PROJECTS-birthday\\\\9890af3b-3799-43b2-abfe-62e5616bc75a\\\\scratchpad\\\\mobile.png' 'C:\\\\Users\\\\harsh\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-harsh-PROJECTS-birthday\\\\9890af3b-3799-43b2-abfe-62e5616bc75a\\\\scratchpad\\\\desktop.png' 'C:\\\\Users\\\\harsh\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-harsh-PROJECTS-birthday\\\\9890af3b-3799-43b2-abfe-62e5616bc75a\\\\scratchpad\\\\mobile2.png' 'C:\\\\Users\\\\harsh\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-harsh-PROJECTS-birthday\\\\9890af3b-3799-43b2-abfe-62e5616bc75a\\\\scratchpad\\\\desktop2.png')",
+      "Bash(kill %1)",
+      "Bash(jobs)",
+      "Bash(rm -f test_harness.html test_harness2.html index_test.html index_shot.html dump.html dump2.html dump3.html dump4.html console.log console2.log console3.log console4.log shot.log)",
+      "Bash(rm -f \"C:\\\\Users\\\\harsh\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-harsh-PROJECTS-birthday\\\\9890af3b-3799-43b2-abfe-62e5616bc75a\\\\scratchpad\\\\noballoon_escape.png\")",
+      "Bash(rm -f index_shot.html dump_c.html dump_c2.html console_c.log console_c2.log shot_c.log)",
+      "Bash(rm -f \"C:\\\\Users\\\\harsh\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-harsh-PROJECTS-birthday\\\\9890af3b-3799-43b2-abfe-62e5616bc75a\\\\scratchpad\\\\gift_reveal.png\")"
+    ]
+  }
+}

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Happy Birthday Baby ❤️</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Ambient background layers: populated by script.js, always kept behind #main-card via z-index in style.css -->
+  <div id="floating-bg" aria-hidden="true"></div>
+  <div id="hearts-bg" aria-hidden="true"></div>
+
+  <!-- Confetti overlay, drawn above everything but never blocks clicks -->
+  <canvas id="confetti-canvas" aria-hidden="true"></canvas>
+
+  <header id="site-header">
+    <h1 id="main-heading">🎂 Happy Birthday Baby ❤️</h1>
+    <p id="subtitle">Every picture floating around you reminds me how lucky I am to have you.</p>
+  </header>
+
+  <main>
+    <section id="main-card" class="glass-card">
+
+      <!-- Stage 1: initial question -->
+      <div id="question-stage" class="stage" data-active="true">
+        <h2>Do you love me?</h2>
+        <div class="balloon-row">
+          <button id="yes-balloon" class="balloon balloon-yes" type="button">YES</button>
+          <button id="no-balloon" class="balloon balloon-no" type="button">NO</button>
+        </div>
+      </div>
+
+      <!-- Stage 2: compliments, shown after YES -->
+      <div id="compliment-stage" class="stage" hidden>
+        <p id="compliment-text"></p>
+        <p id="compliment-counter"></p>
+        <button id="next-compliment-btn" class="action-btn" type="button">Next compliment</button>
+      </div>
+
+      <!-- Stage 3: gift reveal, shown after 10 compliments -->
+      <div id="gift-stage" class="stage" hidden>
+        <button id="open-gift-btn" class="action-btn" type="button">Open Your Birthday Gift</button>
+      </div>
+
+      <!-- Stage 4: final message + ending heart-formation trigger -->
+      <div id="final-stage" class="stage" hidden>
+        <p id="final-message"></p>
+      </div>
+
+    </section>
+  </main>
+
+  <audio id="bg-music" loop preload="none">
+    <source src="music/the_mountain-happy-birthday-508020.mp3" type="audio/mpeg">
+  </audio>
+
+  <!-- compliments.js defines window.BirthdayData before script.js runs -->
+  <script src="compliments.js" defer></script>
+  <script src="script.js" defer></script>
+</body>
+</html>
