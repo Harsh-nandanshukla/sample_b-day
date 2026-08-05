@@ -2,7 +2,8 @@
    Birthday Surprise — style.css
    Pastel pink → warm cream/buff glassmorphism theme.
    Sections: variables, reset, background, floating photos, floating hearts,
-   header, glass card + stages, balloons, confetti, responsive, motion.
+   header, glass card + stages, balloons, confetti, sparkles + music control,
+   final stage + ending heart formation, responsive, motion.
    ========================================================================= */
 
 /* -------------------------------------------------------------------------
@@ -45,7 +46,9 @@
   --z-bg-hearts: 2;
   --z-header: 5;
   --z-card: 10;
+  --z-sparkles: 11;
   --z-confetti: 50;
+  --z-controls: 60;
 
   /* Radii / motion */
   --radius-lg: 28px;
@@ -556,7 +559,112 @@ main {
 }
 
 /* -------------------------------------------------------------------------
-   11. Responsive breakpoints (mobile-first base above; tablet/desktop below)
+   11. Sparkles + music control
+   Sparkles are populated by script.js around #main-card's edge once the
+   celebration starts; each carries --top/--left/--size/--delay/--duration/
+   --sparkle-color, the same inline-custom-property contract used by the
+   floating hearts. The mute button is a persistent, page-level control —
+   hidden until the celebration reveals it — so it lives above everything,
+   including confetti.
+   ------------------------------------------------------------------------- */
+#sparkle-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-sparkles);
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.sparkle {
+  position: fixed;
+  top: var(--top, 50%);
+  left: var(--left, 50%);
+  width: var(--size, 8px);
+  height: var(--size, 8px);
+  background: var(--sparkle-color, var(--pink-300));
+  rotate: 45deg; /* static diamond orientation; opacity/scale carry the twinkle */
+  opacity: 0;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.85);
+  animation: sparkleTwinkle var(--duration, 2.1s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+@keyframes sparkleTwinkle {
+  0%, 100% { opacity: 0;    scale: 0.3; }
+  50%      { opacity: 0.95; scale: 1; }
+}
+
+#mute-toggle {
+  position: fixed;
+  right: clamp(1rem, 4vw, 1.75rem);
+  bottom: clamp(1rem, 4vw, 1.75rem);
+  z-index: var(--z-controls);
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  line-height: 1;
+  border-radius: 50%;
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 10px 24px var(--glass-shadow);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  transition: scale 0.25s var(--ease-elegant), box-shadow 0.25s ease;
+}
+
+#mute-toggle:hover,
+#mute-toggle:focus-visible {
+  scale: 1.08;
+  box-shadow: 0 14px 30px var(--glass-shadow);
+  outline: none;
+}
+
+#mute-toggle:active {
+  scale: 0.94;
+}
+
+/* -------------------------------------------------------------------------
+   12. Final stage + ending heart formation
+   #final-message stays the single <p> already in index.html; script.js
+   fills it with one <span class="final-line"> per paragraph and staggers
+   their entrance from here rather than from a new keyframe per line.
+   ------------------------------------------------------------------------- */
+.final-line {
+  display: block;
+}
+
+.final-line + .final-line {
+  margin-top: 1em;
+}
+
+.final-line--glow {
+  margin-top: 1.4em;
+  font-weight: 700;
+  color: var(--magenta);
+  text-shadow:
+    0 0 10px rgba(214, 49, 122, 0.5),
+    0 0 22px rgba(255, 79, 163, 0.4);
+  animation: foreverGlow 3.2s ease-in-out infinite;
+}
+
+@keyframes foreverGlow {
+  0%, 100% {
+    text-shadow:
+      0 0 10px rgba(214, 49, 122, 0.45),
+      0 0 22px rgba(255, 79, 163, 0.35);
+  }
+  50% {
+    text-shadow:
+      0 0 16px rgba(214, 49, 122, 0.7),
+      0 0 34px rgba(255, 79, 163, 0.55);
+  }
+}
+
+/* -------------------------------------------------------------------------
+   13. Responsive breakpoints (mobile-first base above; tablet/desktop below)
    ------------------------------------------------------------------------- */
 @media (min-width: 600px) {
   .glass-card {
@@ -584,7 +692,7 @@ main {
 }
 
 /* -------------------------------------------------------------------------
-   12. Reduced motion
+   14. Reduced motion
    ------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
   *,

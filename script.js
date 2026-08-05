@@ -1,9 +1,9 @@
 /* =========================================================================
    Birthday Surprise — script.js
-   Implemented so far: the floating background (ambient photos + hearts),
-   the YES/NO balloon interaction, and the compliment system. Confetti,
-   music, the gift-open flow and the final message are separate features,
-   built in later passes.
+   The full story, top to bottom: floating background (ambient photos +
+   hearts) -> YES/NO balloon interaction -> celebration (confetti, sparkles,
+   music) + compliment system -> gift flow -> final message -> ending heart
+   formation.
    ========================================================================= */
 
 (function () {
@@ -275,6 +275,12 @@
      inline custom properties; the actual motion is defined once by the
      .floating-photo / @keyframes photoDrift rules in style.css.
      ----------------------------------------------------------------------- */
+  /* Populated by initFloatingPhotos and read later by the ending heart
+     formation (see formPhotosIntoHeart): each record's el plus its base
+     --start-left/--start-top, since the heart-formation `translate` offset
+     has to be computed relative to that resting position. */
+  var floatingPhotoRecords = [];
+
   function createFloatingPhoto(filename, index, sizeRange, cell, viewportW, viewportH, exclusionRect, placedRects) {
     var img = document.createElement('img');
     img.className = 'floating-photo';
@@ -315,7 +321,7 @@
     var delayMs = Math.round(randomFloat(0, PHOTO_ENTRANCE_STAGGER_MS));
     prepareEntrance(img, delayMs, PHOTO_ENTRANCE_DURATION_MS, true);
 
-    return { el: img, opacity: opacity, withScale: true };
+    return { el: img, opacity: opacity, withScale: true, left: placement.x, top: placement.y };
   }
 
   function initFloatingPhotos() {
@@ -339,6 +345,7 @@
     });
     container.appendChild(fragment);
 
+    floatingPhotoRecords = entries;
     revealEntrances(entries);
   }
 
@@ -374,7 +381,10 @@
     return { el: heart, opacity: opacity, withScale: false };
   }
 
-  function initFloatingHearts() {
+  /* Shared by the initial ambient hearts and the extra hearts spawned
+     during the ending (see formPhotosIntoHeart) — same creation pipeline,
+     just a different count. */
+  function spawnFloatingHearts(count) {
     var container = document.getElementById('hearts-bg');
     if (!container) return;
 
@@ -382,11 +392,10 @@
     var viewportH = window.innerHeight;
     var colors = HEART_SHADE_VARS.map(getCssColor);
     var exclusionRect = getCardExclusionRect();
-    var heartCount = getHeartCount();
     var entries = [];
 
     var fragment = document.createDocumentFragment();
-    for (var i = 0; i < heartCount; i++) {
+    for (var i = 0; i < count; i++) {
       var entry = createFloatingHeart(colors, viewportW, viewportH, exclusionRect);
       entries.push(entry);
       fragment.appendChild(entry.el);
@@ -396,13 +405,19 @@
     revealEntrances(entries);
   }
 
+  function initFloatingHearts() {
+    spawnFloatingHearts(getHeartCount());
+  }
+
   /* =========================================================================
      Balloon interaction
-     YES pops, disables itself, and fades the question stage into the
-     compliment stage — then hands off to the compliment system (see below)
-     to display the first compliment. NO dodges every mouse/touch attempt,
-     shrinking and working through its message list, then dissolves into
-     hearts — at which point YES gets a gentle, encouraging glow.
+     YES pops, disables itself, kicks off the celebration system (music,
+     confetti, sparkles) immediately, and once the pop animation finishes
+     fades the question stage into the compliment stage — which hands off
+     to the compliment system (see below) to display the first compliment.
+     NO dodges every mouse/touch attempt, shrinking and working through its
+     message list, then dissolves into hearts — at which point YES gets a
+     gentle, encouraging glow.
      ========================================================================= */
 
   var STAGE_FADE_OUT_MS = 320;
@@ -411,9 +426,13 @@
 
   var NO_BALLOON_EDGE_MARGIN = 12;
   var NO_BALLOON_TARGET_PADDING = 18; /* keep-clear buffer around the YES balloon */
-  var NO_BALLOON_PLACEMENT_ATTEMPTS = 24;
-  var NO_BALLOON_MIN_JUMP_ATTEMPTS = 14; /* subset of attempts that also prefer a real jump, not a nudge */
-  var NO_BALLOON_MIN_JUMP_DISTANCE = 140;
+  var NO_BALLOON_PROXIMITY_PX = 85; /* cursor has to be genuinely near the balloon to trigger an escape */
+  var NO_BALLOON_NUDGE_MIN = 40;
+  var NO_BALLOON_NUDGE_MAX = 80;
+  var NO_BALLOON_DIRECTION_ATTEMPTS = 14; /* candidate escape angles tried before giving up and settling */
+  var NO_BALLOON_DIRECTION_STEP = Math.PI / 8; /* ~22.5 degrees fanned out per attempt */
+  var NO_BALLOON_VERTICAL_DAMPING = 0.45; /* compresses the vertical pull so escapes read as horizontal/diagonal */
+  var NO_BALLOON_MIN_HORIZONTAL_BIAS = 30; /* keeps a horizontal component even if the cursor is directly above/below */
   var NO_BALLOON_MOVE_MS = 360; /* small safety margin over the .is-escaping 0.35s transition */
   var NO_BALLOON_SHRINK_STEP = 0.1;
   var NO_BALLOON_MIN_SCALE = 0.5; /* five messages x 0.1 lands exactly on this floor */
@@ -446,14 +465,28 @@
     window.setTimeout(onComplete, STAGE_FADE_OUT_MS);
   }
 
-  function switchStage(fromEl, toEl, onSwitched) {
-    fadeOutStage(fromEl, function () {
-      fromEl.hidden = true;
-      fromEl.style.transition = '';
-      fromEl.style.opacity = '';
-      fromEl.style.translate = '';
+  /* fromEls may be a single element or an array — the gift flow needs to
+     fade out both the compliment stage and the gift stage together before
+     the final stage appears. */
+  function switchStage(fromEls, toEl, onSwitched) {
+    var elements = Array.isArray(fromEls) ? fromEls : [fromEls];
+    var pending = elements.length;
+
+    function onOneFaded(el) {
+      el.hidden = true;
+      el.style.transition = '';
+      el.style.opacity = '';
+      el.style.translate = '';
+
+      pending--;
+      if (pending > 0) return;
+
       toEl.hidden = false;
       if (onSwitched) onSwitched();
+    }
+
+    elements.forEach(function (el) {
+      fadeOutStage(el, function () { onOneFaded(el); });
     });
   }
 
@@ -502,12 +535,14 @@
     pulseGlow(yesBalloon, 'rgba(255, 111, 165, 0.45)', 'rgba(255, 111, 165, 0.85)', 2600);
   }
 
-  /* onComplimentStageReady fires once the compliment stage is actually
+  /* onPop fires the instant the balloon starts popping (the earliest
+     possible moment, and the most reliable one for audio.play() to count
+     as user-gesture-initiated) — used to kick off the celebration system.
+     onComplimentStageReady fires once the compliment stage is actually
      visible, so the compliment system can reveal the first compliment at
-     exactly the right moment — kept as a plain callback rather than a
-     direct call so this function doesn't need to know the compliment
-     system exists. */
-  function initYesBalloon(onComplimentStageReady) {
+     exactly the right moment. Both are plain callbacks so this function
+     doesn't need to know the celebration/compliment systems exist. */
+  function initYesBalloon(onPop, onComplimentStageReady) {
     var yesBalloon = document.getElementById('yes-balloon');
     var questionStage = document.getElementById('question-stage');
     var complimentStage = document.getElementById('compliment-stage');
@@ -521,6 +556,7 @@
 
       yesBalloon.disabled = true;
       yesBalloon.classList.add('is-popping');
+      if (onPop) onPop();
 
       window.setTimeout(function () {
         switchStage(questionStage, complimentStage, onComplimentStageReady);
@@ -550,34 +586,47 @@
     return rects;
   }
 
-  /* Finds a spot that (a) stays fully on-screen, (b) never overlaps the
-     card or the YES balloon, and (c) preferably lands far enough from the
-     current spot to read as a real "escape" rather than a tiny nudge. */
-  function findNoBalloonPosition(width, height, viewportW, viewportH, exclusionRects, currentCenter) {
+  /* Picks the escape angle: roughly "away from the cursor", but with the
+     vertical pull damped (and a minimum horizontal push guaranteed even
+     when the cursor sits directly above/below) so the balloon reads as
+     dodging sideways rather than darting up or down the page. */
+  function getNoBalloonEscapeAngle(centerX, centerY, pointerX, pointerY) {
+    var dx = centerX - pointerX;
+    if (Math.abs(dx) < NO_BALLOON_MIN_HORIZONTAL_BIAS) {
+      dx = dx < 0 ? -NO_BALLOON_MIN_HORIZONTAL_BIAS : NO_BALLOON_MIN_HORIZONTAL_BIAS;
+    }
+    var dy = (centerY - pointerY) * NO_BALLOON_VERTICAL_DAMPING;
+    return Math.atan2(dy, dx);
+  }
+
+  /* Finds a small nudge (NO_BALLOON_NUDGE_MIN..MAX px) roughly along
+     awayAngle that (a) stays fully inside the viewport with a margin, and
+     (b) never overlaps the card or the YES balloon. Fans outward from
+     awayAngle in alternating directions when the preferred angle is
+     blocked, so a cramped corner degrades into "whichever nearby
+     direction is free" instead of a long jump across the screen. */
+  function findNoBalloonNudge(width, height, viewportW, viewportH, exclusionRects, fromX, fromY, awayAngle) {
     var maxX = Math.max(NO_BALLOON_EDGE_MARGIN, viewportW - NO_BALLOON_EDGE_MARGIN - width);
     var maxY = Math.max(NO_BALLOON_EDGE_MARGIN, viewportH - NO_BALLOON_EDGE_MARGIN - height);
-    var firstSafeSpot = null;
+    var distance = randomFloat(NO_BALLOON_NUDGE_MIN, NO_BALLOON_NUDGE_MAX);
+    var fallback = null;
 
-    for (var attempt = 0; attempt < NO_BALLOON_PLACEMENT_ATTEMPTS; attempt++) {
-      var x = randomFloat(NO_BALLOON_EDGE_MARGIN, maxX);
-      var y = randomFloat(NO_BALLOON_EDGE_MARGIN, maxY);
+    for (var attempt = 0; attempt < NO_BALLOON_DIRECTION_ATTEMPTS; attempt++) {
+      var spread = Math.ceil(attempt / 2) * NO_BALLOON_DIRECTION_STEP;
+      var angle = awayAngle + (attempt % 2 === 0 ? spread : -spread);
+
+      var x = clamp(fromX + Math.cos(angle) * distance, NO_BALLOON_EDGE_MARGIN, maxX);
+      var y = clamp(fromY + Math.sin(angle) * distance, NO_BALLOON_EDGE_MARGIN, maxY);
       var rect = { left: x, top: y, right: x + width, bottom: y + height };
 
-      var collides = exclusionRects.some(function (excluded) { return rectsOverlap(rect, excluded); });
-      if (collides) continue;
-
-      if (!firstSafeSpot) firstSafeSpot = { x: x, y: y };
-      if (attempt >= NO_BALLOON_MIN_JUMP_ATTEMPTS) return firstSafeSpot;
-
-      var centerX = x + width / 2;
-      var centerY = y + height / 2;
-      var distance = Math.hypot(centerX - currentCenter.x, centerY - currentCenter.y);
-      if (distance >= NO_BALLOON_MIN_JUMP_DISTANCE) return { x: x, y: y };
+      var blocked = exclusionRects.some(function (excluded) { return rectsOverlap(rect, excluded); });
+      if (!blocked) return { x: x, y: y };
+      if (!fallback) fallback = { x: x, y: y };
     }
 
-    return firstSafeSpot || {
-      x: clamp(randomFloat(NO_BALLOON_EDGE_MARGIN, maxX), NO_BALLOON_EDGE_MARGIN, maxX),
-      y: clamp(randomFloat(NO_BALLOON_EDGE_MARGIN, maxY), NO_BALLOON_EDGE_MARGIN, maxY)
+    return fallback || {
+      x: clamp(fromX, NO_BALLOON_EDGE_MARGIN, maxX),
+      y: clamp(fromY, NO_BALLOON_EDGE_MARGIN, maxY)
     };
   }
 
@@ -636,6 +685,7 @@
     var isBusy = false; /* debounces rapid re-triggers while a move is still in flight */
     var finished = false;
     var removed = false;
+    var pointerMoveScheduled = false; /* rAF-throttles the proximity check so it never runs more than once per frame */
 
     /* CSS `scale` is a paint-time visual effect — it does not shrink the
        element's layout box. Bounds/overlap math must reserve the full,
@@ -659,13 +709,26 @@
       void noBalloon.offsetWidth; /* commit that starting spot before relocate() changes it */
     }
 
-    function relocate() {
+    /* Current on-screen center: before the first escape the balloon is
+       still in normal flex flow (no currentX/currentY tracked yet), so
+       that phase falls back to a live read; afterwards the tracked
+       currentX/currentY are used, consistent with relocate() below. */
+    function getCurrentCenter() {
+      if (!baseRect) {
+        var rect = noBalloon.getBoundingClientRect();
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      }
+      return { x: currentX + baseRect.width / 2, y: currentY + baseRect.height / 2 };
+    }
+
+    function relocate(pointerX, pointerY) {
       var viewportW = window.innerWidth;
       var viewportH = window.innerHeight;
       var scale = currentScale();
       var exclusionRects = getNoBalloonExclusionRects(yesBalloon);
-      var currentCenter = { x: currentX + baseRect.width / 2, y: currentY + baseRect.height / 2 };
-      var position = findNoBalloonPosition(baseRect.width, baseRect.height, viewportW, viewportH, exclusionRects, currentCenter);
+      var center = getCurrentCenter();
+      var awayAngle = getNoBalloonEscapeAngle(center.x, center.y, pointerX, pointerY);
+      var position = findNoBalloonNudge(baseRect.width, baseRect.height, viewportW, viewportH, exclusionRects, currentX, currentY, awayAngle);
 
       currentX = position.x;
       currentY = position.y;
@@ -679,6 +742,7 @@
       if (removed) return;
       removed = true;
 
+      document.removeEventListener('mousemove', handlePointerMove);
       if (noBalloon.parentNode) noBalloon.parentNode.removeChild(noBalloon);
       emphasizeYesBalloon(yesBalloon);
     }
@@ -696,7 +760,7 @@
       }, { once: true });
     }
 
-    function escape(event) {
+    function escape(pointerX, pointerY, event) {
       if (finished || isBusy) return;
       if (event && event.cancelable) event.preventDefault();
 
@@ -713,7 +777,7 @@
       noBalloon.textContent = message;
       noBalloon.style.fontSize = Math.max(0.6, 1.05 - message.length * 0.013).toFixed(2) + 'rem';
 
-      relocate();
+      relocate(pointerX, pointerY);
 
       window.setTimeout(function () {
         isBusy = false;
@@ -723,9 +787,247 @@
       }, NO_BALLOON_MOVE_MS);
     }
 
-    noBalloon.addEventListener('mouseenter', escape);
-    noBalloon.addEventListener('touchstart', escape, { passive: false });
-    noBalloon.addEventListener('click', escape);
+    /* mouseenter/touchstart/click all hand off to escape() with the point
+       they happened at, so a genuine contact always dodges even if a fast
+       cursor movement skipped past the proximity check between frames. */
+    function escapeFromEvent(event) {
+      var point = event.touches && event.touches.length
+        ? { x: event.touches[0].clientX, y: event.touches[0].clientY }
+        : { x: event.clientX, y: event.clientY };
+      escape(point.x, point.y, event);
+    }
+
+    /* Proximity trigger: only dodges once the cursor is genuinely close
+       (NO_BALLOON_PROXIMITY_PX), not while it's still far away elsewhere
+       on the page. Throttled to at most once per animation frame. */
+    function checkProximity(pointerX, pointerY) {
+      if (finished || isBusy) return;
+      var center = getCurrentCenter();
+      var distance = Math.hypot(center.x - pointerX, center.y - pointerY);
+      if (distance <= NO_BALLOON_PROXIMITY_PX) escape(pointerX, pointerY, null);
+    }
+
+    function handlePointerMove(event) {
+      var pointerX = event.clientX;
+      var pointerY = event.clientY;
+      if (pointerMoveScheduled) return;
+      pointerMoveScheduled = true;
+      requestAnimationFrame(function () {
+        pointerMoveScheduled = false;
+        checkProximity(pointerX, pointerY);
+      });
+    }
+
+    document.addEventListener('mousemove', handlePointerMove, { passive: true });
+    noBalloon.addEventListener('mouseenter', escapeFromEvent);
+    noBalloon.addEventListener('touchstart', escapeFromEvent, { passive: false });
+    noBalloon.addEventListener('click', escapeFromEvent);
+  }
+
+  /* =========================================================================
+     Celebration system
+     Fired once, right when the YES balloon starts popping: confetti on the
+     existing #confetti-canvas, a scatter of sparkles around the card, and
+     the birthday music fading in. Everything here is lightweight and
+     self-cleaning — confetti and sparkles remove themselves after a fixed
+     duration, nothing keeps a rAF loop running indefinitely.
+     ========================================================================= */
+
+  var CONFETTI_COLOR_VARS = ['--pink-200', '--pink-300', '--pink-400', '--pink-500', '--magenta'];
+  var CONFETTI_PARTICLE_COUNT = 90;
+  var CONFETTI_DURATION_MS = 3200;
+  var CONFETTI_GRAVITY = 0.12;
+  var CONFETTI_DRAG = 0.995;
+
+  var SPARKLE_COUNT = 16;
+  var SPARKLE_RING_PADDING = 26; /* how far outside the card's edge sparkles can land */
+  var SPARKLE_CLEANUP_MS = 5200; /* a little over the CSS sparkleTwinkle cycle so none linger forever */
+
+  var MUSIC_FADE_MS = 2200;
+  var MUSIC_TARGET_VOLUME = 0.55;
+
+  /* Canvas-based confetti burst. Sized in device pixels for crisp edges,
+     driven by a single rAF loop that stops itself once every particle has
+     faded out — nothing left running or listening afterwards. */
+  function launchConfetti() {
+    if (prefersReducedMotion) return;
+
+    var canvas = document.getElementById('confetti-canvas');
+    var ctx = canvas && canvas.getContext && canvas.getContext('2d');
+    if (!ctx) return;
+
+    var width = window.innerWidth;
+    var height = window.innerHeight;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    var colors = CONFETTI_COLOR_VARS.map(getCssColor);
+    var particles = [];
+    for (var i = 0; i < CONFETTI_PARTICLE_COUNT; i++) {
+      particles.push({
+        x: randomFloat(0, width),
+        y: randomFloat(-height * 0.3, 0),
+        vx: randomFloat(-1.6, 1.6),
+        vy: randomFloat(1.5, 4),
+        size: randomFloat(5, 10),
+        color: pickRandom(colors),
+        rotation: randomFloat(0, Math.PI * 2),
+        spin: randomFloat(-0.15, 0.15),
+        isCircle: Math.random() < 0.5
+      });
+    }
+
+    var startTime = null;
+
+    function frame(timestamp) {
+      if (startTime === null) startTime = timestamp;
+      var elapsed = timestamp - startTime;
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.globalAlpha = Math.max(0, 1 - elapsed / CONFETTI_DURATION_MS);
+
+      particles.forEach(function (p) {
+        p.vy += CONFETTI_GRAVITY;
+        p.vx *= CONFETTI_DRAG;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.rotation += p.spin;
+
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rotation);
+        ctx.fillStyle = p.color;
+        if (p.isCircle) {
+          ctx.beginPath();
+          ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
+        }
+        ctx.restore();
+      });
+
+      if (elapsed < CONFETTI_DURATION_MS) {
+        requestAnimationFrame(frame);
+      } else {
+        ctx.clearRect(0, 0, width, height);
+      }
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  /* Scatters small twinkling sparkles in a ring just outside #main-card,
+     reusing the same inline-custom-property + bounded-cleanup pattern as
+     the NO balloon's heart burst. */
+  function spawnSparkles() {
+    if (prefersReducedMotion) return;
+
+    var layer = document.getElementById('sparkle-layer');
+    var card = document.getElementById('main-card');
+    if (!layer || !card) return;
+
+    var rect = card.getBoundingClientRect();
+    var colors = HEART_SHADE_VARS.map(getCssColor);
+    var fragment = document.createDocumentFragment();
+    var sparkleEls = [];
+
+    for (var i = 0; i < SPARKLE_COUNT; i++) {
+      var sparkle = document.createElement('span');
+      sparkle.className = 'sparkle';
+
+      var angle = randomFloat(0, Math.PI * 2);
+      var radiusX = rect.width / 2 + randomFloat(0, SPARKLE_RING_PADDING);
+      var radiusY = rect.height / 2 + randomFloat(0, SPARKLE_RING_PADDING);
+      var x = rect.left + rect.width / 2 + Math.cos(angle) * radiusX;
+      var y = rect.top + rect.height / 2 + Math.sin(angle) * radiusY;
+
+      sparkle.style.setProperty('--top', y.toFixed(1) + 'px');
+      sparkle.style.setProperty('--left', x.toFixed(1) + 'px');
+      sparkle.style.setProperty('--size', randomInt(6, 14) + 'px');
+      sparkle.style.setProperty('--delay', randomFloat(0, 1.6).toFixed(2) + 's');
+      sparkle.style.setProperty('--duration', randomFloat(1.6, 2.6).toFixed(2) + 's');
+      sparkle.style.setProperty('--sparkle-color', pickRandom(colors));
+
+      fragment.appendChild(sparkle);
+      sparkleEls.push(sparkle);
+    }
+
+    layer.appendChild(fragment);
+
+    window.setTimeout(function () {
+      sparkleEls.forEach(function (el) {
+        if (el.parentNode) el.parentNode.removeChild(el);
+      });
+    }, SPARKLE_CLEANUP_MS);
+  }
+
+  /* Ramps volume from 0 up to MUSIC_TARGET_VOLUME via rAF rather than a
+     CSS transition (audio.volume isn't animatable in CSS). play() is
+     called synchronously from the caller's click handler wherever
+     possible so browsers count it as user-gesture-initiated; a rejected
+     promise (autoplay blocked) is swallowed since the mute button still
+     works once playback does start. */
+  function fadeInAudio(audio) {
+    audio.volume = 0;
+    var playPromise = audio.play();
+    if (playPromise && typeof playPromise.catch === 'function') {
+      playPromise.catch(function () {});
+    }
+
+    if (prefersReducedMotion) {
+      audio.volume = MUSIC_TARGET_VOLUME;
+      return;
+    }
+
+    var startTime = null;
+    function step(timestamp) {
+      if (startTime === null) startTime = timestamp;
+      var progress = Math.min(1, (timestamp - startTime) / MUSIC_FADE_MS);
+      audio.volume = MUSIC_TARGET_VOLUME * progress;
+      if (progress < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  function initMusicSystem() {
+    var audio = document.getElementById('bg-music');
+    var muteBtn = document.getElementById('mute-toggle');
+
+    if (muteBtn && audio) {
+      muteBtn.addEventListener('click', function () {
+        audio.muted = !audio.muted;
+        muteBtn.textContent = audio.muted ? '🔇' : '🔊';
+        muteBtn.setAttribute('aria-pressed', String(audio.muted));
+        muteBtn.setAttribute('aria-label', audio.muted ? 'Unmute music' : 'Mute music');
+      });
+    }
+
+    return {
+      start: function () {
+        if (!audio) return;
+        fadeInAudio(audio);
+        if (muteBtn) muteBtn.hidden = false;
+      }
+    };
+  }
+
+  function initCelebrationSystem() {
+    var musicSystem = initMusicSystem();
+    var started = false;
+
+    return {
+      start: function () {
+        if (started) return;
+        started = true;
+
+        musicSystem.start();
+        launchConfetti();
+        spawnSparkles();
+      }
+    };
   }
 
   /* =========================================================================
@@ -734,8 +1036,8 @@
      drawn from a shuffled queue so nothing repeats until every compliment
      has been shown once. After 10 have been viewed, the gift stage is
      revealed alongside the compliment stage — the Next button stays live,
-     the gift button gets a glow. Confetti, music, the gift-open flow and
-     the final message are not implemented here.
+     the gift button gets a glow (see initGiftFlow below for what happens
+     when it's clicked).
      ========================================================================= */
 
   var COMPLIMENT_FADE_MS = 260;
@@ -822,10 +1124,158 @@
     return { start: showNext };
   }
 
+  /* =========================================================================
+     Gift flow
+     Clicking the gift button fades out both the compliment stage and the
+     gift stage together (they're visible side by side, see above) and
+     reveals the final stage. Reuses switchStage's multi-fromEl support.
+     ========================================================================= */
+  function initGiftFlow(onFinalStageReady) {
+    var openGiftBtn = document.getElementById('open-gift-btn');
+    var complimentStage = document.getElementById('compliment-stage');
+    var giftStage = document.getElementById('gift-stage');
+    var finalStage = document.getElementById('final-stage');
+    if (!openGiftBtn || !complimentStage || !giftStage || !finalStage) return;
+
+    var opened = false;
+
+    openGiftBtn.addEventListener('click', function () {
+      if (opened) return;
+      opened = true;
+
+      openGiftBtn.disabled = true;
+      switchStage([complimentStage, giftStage], finalStage, onFinalStageReady);
+    });
+  }
+
+  /* =========================================================================
+     Final stage + ending heart formation
+     The final message's paragraphs stagger in one at a time, the last line
+     ("Forever & Always ❤️") gets a soft permanent glow, and — once the
+     reader has had a moment with it — every floating photo drifts into a
+     large heart shape while the floating hearts keep animating behind it.
+     ========================================================================= */
+
+  var FINAL_LINE_DURATION_MS = 700;
+  var FINAL_LINE_STAGGER_MS = 260;
+  var ENDING_START_DELAY_MS = 1400; /* reading pause after the last line lands */
+  var ENDING_EXTRA_HEART_COUNT = 40;
+  var HEART_FORMATION_STAGGER_MS = 35;
+
+  /* Points around a classic parametric heart curve, evenly spaced, scaled
+     to targetWidth and centered on (centerX, centerY). Centering uses the
+     curve's actual computed bounds rather than assumed constants, so it
+     stays correct regardless of how the curve itself is tuned later. */
+  function computeHeartPoints(count, centerX, centerY, targetWidth) {
+    var raw = [];
+    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
+    for (var i = 0; i < count; i++) {
+      var t = (i / count) * Math.PI * 2;
+      var x = 16 * Math.pow(Math.sin(t), 3);
+      var y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+      raw.push({ x: x, y: y });
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+
+    var scale = targetWidth / (maxX - minX);
+    var midX = (minX + maxX) / 2;
+    var midY = (minY + maxY) / 2;
+
+    return raw.map(function (p) {
+      return {
+        x: centerX + (p.x - midX) * scale,
+        /* flip: the curve's y grows upward (math convention), screen y grows downward */
+        y: centerY - (p.y - midY) * scale
+      };
+    });
+  }
+
+  /* Pauses each photo's ambient drift (via the #floating-bg.is-forming-heart
+     CSS hook already defined in style.css) and transitions it onto a point
+     on the heart curve. --heart-x/--heart-y are offsets from the photo's
+     own resting position, since `translate` is always relative to that —
+     never absolute page coordinates. Uniform `scale` keeps every photo's
+     aspect ratio intact throughout (only translate/rotate/scale animate;
+     width/height, and therefore the photo's shape, are never touched). */
+  function formPhotosIntoHeart() {
+    var container = document.getElementById('floating-bg');
+    if (!container || !floatingPhotoRecords.length) return;
+
+    container.classList.add('is-forming-heart');
+
+    var viewportW = window.innerWidth;
+    var viewportH = window.innerHeight;
+    var centerX = viewportW / 2;
+    var centerY = viewportH * 0.46;
+    var targetWidth = clamp(Math.min(viewportW, viewportH) * 0.78, 260, 620);
+    var points = computeHeartPoints(floatingPhotoRecords.length, centerX, centerY, targetWidth);
+
+    floatingPhotoRecords.forEach(function (record, index) {
+      var point = points[index];
+      record.el.style.setProperty('--heart-x', (point.x - record.left).toFixed(1) + 'px');
+      record.el.style.setProperty('--heart-y', (point.y - record.top).toFixed(1) + 'px');
+      record.el.style.zIndex = String(index); /* stable layering while they converge, no z-fighting */
+      record.el.style.transitionDelay = (index * HEART_FORMATION_STAGGER_MS) + 'ms';
+      record.el.classList.add('at-heart-position');
+    });
+
+    spawnFloatingHearts(ENDING_EXTRA_HEART_COUNT);
+  }
+
+  /* Builds one <span class="final-line"> per paragraph of
+     BirthdayData.finalMessage inside the existing #final-message <p>,
+     staggers them in with the same fade+slide technique used elsewhere in
+     this file, glows the closing line, then hands off to the heart
+     formation once the reader has had a moment to take it in. */
+  function showFinalMessage() {
+    var finalMessageEl = document.getElementById('final-message');
+    if (!finalMessageEl) return;
+
+    var text = (window.BirthdayData && window.BirthdayData.finalMessage) || '';
+    var lines = text.split('\n\n').filter(function (line) { return line.trim().length > 0; });
+    if (!lines.length) return;
+
+    finalMessageEl.textContent = '';
+    var spans = lines.map(function (line, index) {
+      var span = document.createElement('span');
+      span.className = 'final-line' + (index === lines.length - 1 ? ' final-line--glow' : '');
+      span.textContent = line;
+      finalMessageEl.appendChild(span);
+      return span;
+    });
+
+    spans.forEach(function (span, index) {
+      var delayMs = index * FINAL_LINE_STAGGER_MS;
+      span.style.transition = 'opacity ' + FINAL_LINE_DURATION_MS + 'ms var(--ease-elegant) ' + delayMs + 'ms, ' +
+        'translate ' + FINAL_LINE_DURATION_MS + 'ms var(--ease-elegant) ' + delayMs + 'ms';
+      span.style.opacity = '0';
+      span.style.translate = '0 16px';
+    });
+
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        spans.forEach(function (span) {
+          span.style.opacity = '1';
+          span.style.translate = '0 0';
+        });
+      });
+    });
+
+    var totalRevealMs = (lines.length - 1) * FINAL_LINE_STAGGER_MS + FINAL_LINE_DURATION_MS;
+    window.setTimeout(formPhotosIntoHeart, totalRevealMs + ENDING_START_DELAY_MS);
+  }
+
   function initBalloonInteraction() {
     var complimentSystem = initComplimentSystem();
-    initYesBalloon(complimentSystem.start);
+    var celebrationSystem = initCelebrationSystem();
+
+    initYesBalloon(celebrationSystem.start, complimentSystem.start);
     initNoBalloonInteraction();
+    initGiftFlow(showFinalMessage);
   }
 
   /* -----------------------------------------------------------------------
@@ -834,7 +1284,8 @@
      fixed, pointer-events: none, and layered beneath #main-card by
      z-index (see style.css) — so no matter where an element lands, it can
      never visually cover or intercept clicks meant for the center card.
-     Balloon interaction is wired up the same pass, independent of the
+     initBalloonInteraction wires up the rest of the story (celebration,
+     compliments, gift, final message, ending) independently of the
      floating background.
      ----------------------------------------------------------------------- */
   document.addEventListener('DOMContentLoaded', function () {

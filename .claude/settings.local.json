@@ -12,7 +12,8 @@
       "Bash(rm -f test_harness.html test_harness2.html index_test.html index_shot.html dump.html dump2.html dump3.html dump4.html console.log console2.log console3.log console4.log shot.log)",
       "Bash(rm -f \"C:\\\\Users\\\\harsh\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-harsh-PROJECTS-birthday\\\\9890af3b-3799-43b2-abfe-62e5616bc75a\\\\scratchpad\\\\noballoon_escape.png\")",
       "Bash(rm -f index_shot.html dump_c.html dump_c2.html console_c.log console_c2.log shot_c.log)",
-      "Bash(rm -f \"C:\\\\Users\\\\harsh\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-harsh-PROJECTS-birthday\\\\9890af3b-3799-43b2-abfe-62e5616bc75a\\\\scratchpad\\\\gift_reveal.png\")"
+      "Bash(rm -f \"C:\\\\Users\\\\harsh\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-harsh-PROJECTS-birthday\\\\9890af3b-3799-43b2-abfe-62e5616bc75a\\\\scratchpad\\\\gift_reveal.png\")",
+      "Bash(python -c ' *)"
     ]
   }
 }
